@@ -14,7 +14,27 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+    const [user, setUserState] = useState(null);
+
+    const setUser = (u) => {
+        if (!u) {
+            setUserState(null);
+            return;
+        }
+        const normalized = {
+            ...u,
+            fullName: u.fullName || u.full_name || '',
+            onboardingCompleted: u.onboardingCompleted !== undefined 
+                ? u.onboardingCompleted 
+                : (u.onboarding_completed !== undefined ? u.onboarding_completed : false),
+            onboarding_completed: u.onboardingCompleted !== undefined 
+                ? u.onboardingCompleted 
+                : (u.onboarding_completed !== undefined ? u.onboarding_completed : false)
+        };
+        setUserState(normalized);
+        localStorage.setItem('user', JSON.stringify(normalized));
+        localStorage.setItem('onboardingCompleted', normalized.onboardingCompleted ? 'true' : 'false');
+    };
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const navigate = useNavigate();
@@ -149,7 +169,6 @@ export const AuthProvider = ({ children }) => {
 
     const updateUser = (updatedUser) => {
         setUser(updatedUser);
-        localStorage.setItem('user', JSON.stringify(updatedUser));
         setIsAuthenticated(true);
     };
 

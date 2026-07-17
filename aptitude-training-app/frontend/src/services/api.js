@@ -39,6 +39,28 @@ export const setAuthToken = (token) => {
     }
 };
 
+// Helper to normalize and save user to localStorage
+export const saveUserToLocalStorage = (user) => {
+    if (!user) {
+        localStorage.removeItem('user');
+        localStorage.removeItem('onboardingCompleted');
+        return null;
+    }
+    const onboardingCompleted = user.onboardingCompleted !== undefined 
+        ? user.onboardingCompleted 
+        : (user.onboarding_completed !== undefined ? user.onboarding_completed : false);
+        
+    const normalizedUser = {
+        ...user,
+        fullName: user.fullName || user.full_name || '',
+        onboardingCompleted: onboardingCompleted,
+        onboarding_completed: onboardingCompleted
+    };
+    localStorage.setItem('user', JSON.stringify(normalizedUser));
+    localStorage.setItem('onboardingCompleted', onboardingCompleted ? 'true' : 'false');
+    return normalizedUser;
+};
+
 // Remove auth token
 export const removeAuthToken = () => {
     delete api.defaults.headers.common['Authorization'];
@@ -177,7 +199,7 @@ export const register = async (email, password, fullName) => {
         setAuthToken(response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
         if (response.data.user) {
-            localStorage.setItem('user', JSON.stringify(response.data.user));
+            response.data.user = saveUserToLocalStorage(response.data.user);
         }
     }
     return response.data;
@@ -195,8 +217,7 @@ export const login = async (email, password) => {
         setAuthToken(response.data.accessToken);
         localStorage.setItem('refreshToken', response.data.refreshToken);
         if (response.data.user) {
-            localStorage.setItem('user', JSON.stringify(response.data.user));
-            localStorage.setItem('onboardingCompleted', response.data.user.onboardingCompleted);
+            response.data.user = saveUserToLocalStorage(response.data.user);
         }
     }
     return response.data;
@@ -209,8 +230,7 @@ export const login = async (email, password) => {
 export const getMe = async () => {
     const response = await api.get('/auth/me');
     if (response.data.user) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        localStorage.setItem('onboardingCompleted', response.data.user.onboardingCompleted);
+        response.data.user = saveUserToLocalStorage(response.data.user);
     }
     return response.data;
 };
@@ -224,7 +244,7 @@ export const updateProfile = async (profileData) => {
     const response = await api.put('/auth/profile', profileData);
     if (response.data.user) {
         const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        localStorage.setItem('user', JSON.stringify({ ...currentUser, ...response.data.user }));
+        response.data.user = saveUserToLocalStorage({ ...currentUser, ...response.data.user });
     }
     return response.data;
 };
@@ -341,9 +361,8 @@ export const getDiagnosticResults = async () => {
 export const completeOnboarding = async () => {
     const response = await api.post('/user/complete-onboarding');
     if (response.data.user) {
-        localStorage.setItem('onboardingCompleted', 'true');
         const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        localStorage.setItem('user', JSON.stringify({ ...currentUser, onboardingCompleted: true }));
+        response.data.user = saveUserToLocalStorage({ ...currentUser, ...response.data.user, onboardingCompleted: true });
     }
     return response.data;
 };
