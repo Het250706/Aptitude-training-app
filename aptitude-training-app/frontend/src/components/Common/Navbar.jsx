@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Brain, Menu, X, User, LogOut, Home, BookOpen, BarChart3 } from 'lucide-react';
-import { logout, isAuthenticated } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 const Navbar = ({ onLoginClick }) => {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -11,10 +11,8 @@ const Navbar = ({ onLoginClick }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const isOnboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
-    const isAuth = isAuthenticated();
+    const { logout, isAuthenticated: isAuth, user } = useAuth();
+    const isOnboardingCompleted = user?.onboardingCompleted;
 
     useEffect(() => {
         const handleScroll = () => {

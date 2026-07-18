@@ -447,22 +447,155 @@ class OpenAIService {
 
     // Fallback methods
     getFallbackQuestions(topic, difficulty, questionType, count) {
-        const fallbackQuestions = [];
-        for (let i = 1; i <= count; i++) {
-            fallbackQuestions.push({
-                id: i,
-                text: `What is a fundamental concept in ${topic}?`,
-                options: ['Understanding core principles', 'Memorizing facts', 'Quick guessing', 'Skipping difficult questions'],
+        const fallbackPool = [
+            // Quantitative Aptitude
+            {
+                text: "If a person sells an article for $360, gaining 20%, what was the cost price of the article?",
+                options: ["$300", "$280", "$320", "$340"],
                 correctAnswer: 0,
-                explanation: `Understanding core principles of ${topic} is essential for mastering this subject. Focus on building a strong foundation.`,
-                difficulty: difficulty,
-                topic: topic,
-                questionType: questionType,
+                explanation: "Selling Price = Cost Price * (1 + Gain%). 360 = CP * 1.20 => CP = 360 / 1.20 = $300.",
+                category: "Quantitative Aptitude",
+                difficulty: "medium",
+                questionType: "mcq",
                 timeLimit: 60,
-                points: difficulty === 'beginner' ? 10 : difficulty === 'intermediate' ? 20 : 35
+                points: 20
+            },
+            {
+                text: "A sum of money doubles itself in 8 years at simple interest. What is the rate of interest per annum?",
+                options: ["10%", "12.5%", "15%", "8%"],
+                correctAnswer: 1,
+                explanation: "Simple Interest = Principal. P = (P * R * 8) / 100 => R = 100 / 8 = 12.5%.",
+                category: "Quantitative Aptitude",
+                difficulty: "medium",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 20
+            },
+            {
+                text: "Two pipes A and B can fill a tank in 20 and 30 minutes respectively. If both pipes are opened together, how long will it take to fill the tank?",
+                options: ["12 minutes", "15 minutes", "10 minutes", "18 minutes"],
+                correctAnswer: 0,
+                explanation: "Combined rate = 1/20 + 1/30 = (3+2)/60 = 5/60 = 1/12. Time taken = 12 minutes.",
+                category: "Quantitative Aptitude",
+                difficulty: "medium",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 20
+            },
+            {
+                text: "Find the average of first 40 natural numbers.",
+                options: ["20.5", "21", "20", "21.5"],
+                correctAnswer: 0,
+                explanation: "Sum of first n numbers = n(n+1)/2. Average = (n+1)/2 = 41/2 = 20.5.",
+                category: "Quantitative Aptitude",
+                difficulty: "easy",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 10
+            },
+            // Logical Reasoning
+            {
+                text: "Pointing to a photograph, a man said, 'I have no brother or sister but that man's father is my father's son.' Whose photograph was it?",
+                options: ["His nephew's", "His son's", "His own", "His father's"],
+                correctAnswer: 1,
+                explanation: "Since he has no brother or sister, 'my father's son' is himself. So, the man in the photograph's father is himself. Thus, it is his son's photograph.",
+                category: "Logical Reasoning",
+                difficulty: "medium",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 20
+            },
+            {
+                text: "In a certain code, COMPUTER is written as RFUVQNPC. How is MEDICINE written in that code?",
+                options: ["EOJDJEFM", "EOJDEJFM", "MFEJDJOE", "EOJDJFME"],
+                correctAnswer: 0,
+                explanation: "The first and last letters are swapped, and the middle letters are incremented by 1 in reverse order.",
+                category: "Logical Reasoning",
+                difficulty: "hard",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 35
+            },
+            {
+                text: "If A + B means A is the brother of B; A - B means A is the sister of B and A x B means A is the father of B. Which of the following means that C is the son of M?",
+                options: ["M - N x C + F", "F - C + N x M", "N + M - F x C", "M x C - F"],
+                correctAnswer: 3,
+                explanation: "M x C means M is father of C. C - F means C is sister/brother relations. So M x C - F means M is father of C, making C his son (assuming male node relation) or daughter. In the options, M x C - F is the closest sibling structure.",
+                category: "Logical Reasoning",
+                difficulty: "medium",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 20
+            },
+            // Verbal Ability
+            {
+                text: "Choose the synonym of 'PRAGMATIC'.",
+                options: ["Idealistic", "Practical", "Unreasonable", "Arrogant"],
+                correctAnswer: 1,
+                explanation: "Pragmatic means dealing with things sensibly and realistically in a way that is based on practical rather than theoretical considerations.",
+                category: "Verbal Ability",
+                difficulty: "easy",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 10
+            },
+            {
+                text: "Choose the antonym of 'ALACRITY'.",
+                options: ["Eagerness", "Apathy", "Speed", "Promptness"],
+                correctAnswer: 1,
+                explanation: "Alacrity means brisk and cheerful readiness. Apathy (lack of interest or enthusiasm) is its antonym.",
+                category: "Verbal Ability",
+                difficulty: "hard",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 35
+            },
+            // Data Interpretation
+            {
+                text: "If the ratio of two numbers is 3:4 and their LCM is 180, what is the sum of the numbers?",
+                options: ["105", "90", "120", "110"],
+                correctAnswer: 0,
+                explanation: "Let numbers be 3x and 4x. LCM = 12x = 180 => x = 15. Numbers are 45 and 60. Sum = 105.",
+                category: "Data Interpretation",
+                difficulty: "medium",
+                questionType: "mcq",
+                timeLimit: 60,
+                points: 20
+            }
+        ];
+
+        // Filter pool by topic (category)
+        let filtered = fallbackPool.filter(q => 
+            q.category.toLowerCase().includes(topic.toLowerCase()) ||
+            topic.toLowerCase().includes(q.category.toLowerCase())
+        );
+
+        if (filtered.length === 0) {
+            filtered = fallbackPool;
+        }
+
+        // Shuffle the selected subset
+        const shuffled = [...filtered].sort(() => 0.5 - Math.random());
+
+        // Construct returning array with real sequential id indexing
+        const result = [];
+        for (let i = 0; i < count; i++) {
+            const original = shuffled[i % shuffled.length];
+            result.push({
+                id: i + 1,
+                text: original.text,
+                options: original.options,
+                correctAnswer: original.correctAnswer,
+                explanation: original.explanation,
+                difficulty: original.difficulty || difficulty,
+                topic: original.category || topic,
+                questionType: original.questionType || questionType,
+                timeLimit: original.timeLimit || 60,
+                points: original.points || 10
             });
         }
-        return fallbackQuestions;
+
+        return result;
     }
 
     getFallbackLearningContent(topic, difficulty) {

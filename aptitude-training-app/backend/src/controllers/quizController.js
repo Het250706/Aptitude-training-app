@@ -17,7 +17,41 @@ class QuizController {
     async startQuiz(req, res) {
         try {
             const userId = req.userId;
-            const { topic, difficulty = 'intermediate', questionType = 'mcq', questionCount = 10 } = req.body;
+            let { topic, difficulty = 'intermediate', questionType = 'mcq', questionCount = 10 } = req.body;
+
+            // Resolve missing topic from user's active learning path or profile targets
+            if (!topic) {
+                try {
+                    const activeNodeQuery = `
+                        SELECT lpn.topic as module_name
+                        FROM learning_path_nodes lpn
+                        JOIN user_learning_progress ulp ON lpn.id = ulp.node_id
+                        WHERE ulp.user_id = $1 AND ulp.progress_percentage < 100
+                        LIMIT 1
+                    `;
+                    const nodeResult = await db.query(activeNodeQuery, [userId]);
+                    if (nodeResult.rows[0]) {
+                        topic = nodeResult.rows[0].module_name;
+                    }
+                } catch (e) {
+                    console.error('Error fetching active module for quiz topic:', e.message);
+                }
+            }
+
+            if (!topic) {
+                try {
+                    const userProfile = await UserProfile.findByUserId(userId);
+                    if (userProfile && userProfile.target_aptitude_areas && userProfile.target_aptitude_areas.length > 0) {
+                        topic = userProfile.target_aptitude_areas[0];
+                    }
+                } catch (e) {
+                    console.error('Error fetching target areas for quiz topic:', e.message);
+                }
+            }
+
+            if (!topic) {
+                topic = 'Quantitative Aptitude'; // Absolute fallback
+            }
 
             // Check cache for existing questions
             const cacheKey = `${topic}_${difficulty}_${questionType}`;
@@ -35,10 +69,48 @@ class QuizController {
                     weaknesses: userPerformance?.weaknesses || []
                 };
 
-                // Generate AI-powered questions
-                questions = await openAIService.generateQuestions(
+                // Generate AI-powered questions (falls back to local generators if OpenAI fails)
+                const rawQuestions = await openAIService.generateQuestions(
                     topic, difficulty, questionType, questionCount, userContext
                 );
+
+                // Insert questions into database to get real database IDs (prevents foreign key check violations)
+                const savedQuestions = [];
+                for (const q of rawQuestions) {
+                    const insertQuery = `
+                        INSERT INTO adaptive_questions 
+                        (category, subcategory, difficulty_level, question_type, question_text, options, correct_answer, explanation, hints, points_awarded, time_limit)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        RETURNING id
+                    `;
+
+                    // Ensure correctAnswer is index-mapped to the text option
+                    const correctText = Array.isArray(q.options) && q.correctAnswer !== undefined
+                        ? String(q.options[q.correctAnswer])
+                        : String(q.correctAnswer || '');
+
+                    const values = [
+                        topic,
+                        q.subcategory || null,
+                        difficulty,
+                        questionType,
+                        q.text,
+                        JSON.stringify(q.options),
+                        correctText,
+                        q.explanation || null,
+                        q.hints || [],
+                        q.points || 10,
+                        q.timeLimit || 60
+                    ];
+
+                    const dbResult = await db.query(insertQuery, values);
+                    savedQuestions.push({
+                        ...q,
+                        id: dbResult.rows[0].id // Inject the database SERIAL id
+                    });
+                }
+
+                questions = savedQuestions;
 
                 // Cache for 1 hour
                 questionCache.set(cacheKey, questions);
@@ -48,22 +120,25 @@ class QuizController {
             // Create session
             const session = await AdaptiveQuiz.startSession(userId);
 
+            // Shuffle the questions array for this specific session so users get a randomized order
+            const sessionQuestions = [...questions].sort(() => 0.5 - Math.random());
+
             // Store questions in session
-            await AdaptiveQuiz.saveQuestionsToSession(session.id, questions);
+            await AdaptiveQuiz.saveQuestionsToSession(session.id, sessionQuestions);
 
             res.json({
                 success: true,
                 sessionId: session.id,
                 sessionToken: session.session_token,
-                totalQuestions: questions.length,
+                totalQuestions: sessionQuestions.length,
                 firstQuestion: {
-                    id: questions[0].id,
-                    text: questions[0].text,
-                    type: questions[0].questionType,
-                    options: questions[0].options,
-                    timeLimit: questions[0].timeLimit || 60,
-                    points: questions[0].points,
-                    hints: questions[0].hints
+                    id: sessionQuestions[0].id,
+                    text: sessionQuestions[0].text,
+                    type: sessionQuestions[0].questionType,
+                    options: sessionQuestions[0].options,
+                    timeLimit: sessionQuestions[0].timeLimit || 60,
+                    points: sessionQuestions[0].points,
+                    hints: sessionQuestions[0].hints
                 }
             });
         } catch (error) {
@@ -105,20 +180,44 @@ class QuizController {
             // Get next question (adaptive based on performance)
             let nextQuestion = null;
             if (result.questions_answered < result.total_questions) {
-                const performance = {
-                    correctRate: result.correct_answers / result.questions_answered,
-                    averageTime: result.average_time,
-                    strengths: analysis.strengths,
-                    weaknesses: analysis.improvements
-                };
+                try {
+                    const performance = {
+                        correctRate: result.correct_answers / result.questions_answered,
+                        averageTime: result.average_time,
+                        strengths: analysis.strengths,
+                        weaknesses: analysis.improvements
+                    };
 
-                const adaptiveQuestion = await openAIService.generateAdaptiveQuestion(
-                    performance, question.difficulty, question.topic
-                );
+                    const adaptiveQuestion = await openAIService.generateAdaptiveQuestion(
+                        performance, question.difficulty, question.topic
+                    );
 
-                if (adaptiveQuestion) {
-                    nextQuestion = adaptiveQuestion;
-                    await AdaptiveQuiz.saveQuestionToSession(sessionId, nextQuestion);
+                    if (adaptiveQuestion) {
+                        nextQuestion = adaptiveQuestion;
+                        await AdaptiveQuiz.saveQuestionToSession(sessionId, nextQuestion);
+                    }
+                } catch (err) {
+                    console.error('Error generating adaptive next question, using fallback:', err.message);
+                }
+
+                if (!nextQuestion) {
+                    // Fallback to pre-generated questions in session data
+                    try {
+                        const sessionQuery = 'SELECT questions_data FROM quiz_sessions WHERE id = $1';
+                        const sessionRes = await db.query(sessionQuery, [sessionId]);
+                        if (sessionRes.rows[0] && sessionRes.rows[0].questions_data) {
+                            const questions = typeof sessionRes.rows[0].questions_data === 'string'
+                                ? JSON.parse(sessionRes.rows[0].questions_data)
+                                : sessionRes.rows[0].questions_data;
+                            
+                            // The next question index corresponds to result.questions_answered
+                            if (questions && questions[result.questions_answered]) {
+                                nextQuestion = questions[result.questions_answered];
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error loading fallback next question from session:', e.message);
+                    }
                 }
             }
 
@@ -139,6 +238,9 @@ class QuizController {
 
             res.json({
                 success: true,
+                correctAnswer: (Array.isArray(question.options) && question.correctAnswer !== undefined)
+                    ? question.options[question.correctAnswer]
+                    : question.correct_answer,
                 analysis: {
                     isCorrect: analysis.isCorrect,
                     score: analysis.score,
@@ -188,10 +290,11 @@ class QuizController {
         SELECT 
           AVG(CASE WHEN is_correct THEN 1 ELSE 0 END) as average_score,
           AVG(time_taken) as average_time,
-          json_agg(DISTINCT topic) as topics_attempted
+          json_agg(DISTINCT category) as topics_attempted
         FROM quiz_responses qr
+        JOIN quiz_sessions qs ON qr.session_id = qs.id
         JOIN adaptive_questions q ON qr.question_id = q.id
-        WHERE qr.user_id = $1
+        WHERE qs.user_id = $1
       `;
             const result = await db.query(query, [userId]);
             return result.rows[0];
@@ -206,8 +309,9 @@ class QuizController {
             const query = `
         SELECT is_correct, time_taken
         FROM quiz_responses qr
+        JOIN quiz_sessions qs ON qr.session_id = qs.id
         JOIN adaptive_questions q ON qr.question_id = q.id
-        WHERE qr.user_id = $1 AND q.topic = $2
+        WHERE qs.user_id = $1 AND q.category = $2
         ORDER BY qr.answered_at DESC
         LIMIT 10
       `;

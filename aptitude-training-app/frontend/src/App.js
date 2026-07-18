@@ -36,6 +36,7 @@ import GdprPage from './pages/Legal/GdprPage';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import LearningPathPage from './pages/Dashboard/LearningPathPage';
 import ProfilePage from './pages/Dashboard/ProfilePage';
+import QuizPage from './pages/Dashboard/QuizPage';
 
 // Loading Component
 import LoadingSpinner from './components/Common/LoadingSpinner';
@@ -244,6 +245,11 @@ function App() {
                         <Route path="/profile" element={
                             <ProtectedRoute>
                                 <PageTransition><ProfilePage /></PageTransition>
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/quiz" element={
+                            <ProtectedRoute>
+                                <PageTransition><QuizPage /></PageTransition>
                             </ProtectedRoute>
                         } />
 

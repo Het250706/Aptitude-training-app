@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
     TrendingUp, Award, Clock, Target, BookOpen,
     ChevronRight, Zap, Flame, Brain, Sparkles,
-    Loader, RefreshCw
+    Loader, RefreshCw, X, CheckCircle2
 } from 'lucide-react';
 import Navbar from '../../components/Common/Navbar';
 import Footer from '../../components/Common/Footer';
@@ -16,6 +16,7 @@ const DashboardPage = () => {
     const [loading, setLoading] = useState(true);
     const [generatingContent, setGeneratingContent] = useState(false);
     const [aiContent, setAiContent] = useState(null);
+    const [showLessonModal, setShowLessonModal] = useState(false);
 
     useEffect(() => {
         fetchDashboardData();
@@ -192,12 +193,15 @@ const DashboardPage = () => {
                             <div className="prose max-w-none">
                                 <div dangerouslySetInnerHTML={{ __html: aiContent.content?.introduction || '' }} />
                             </div>
-                            <div className="mt-4 flex items-center justify-between">
-                                <span className="text-sm text-gray-500">⏱️ {aiContent.estimatedTime} min read</span>
-                                <button className="text-purple-600 hover:text-purple-700 font-medium">
-                                    Start Learning →
-                                </button>
-                            </div>
+                             <div className="mt-4 flex items-center justify-between">
+                                 <span className="text-sm text-gray-500">⏱️ {aiContent.estimatedTime} min read</span>
+                                 <button 
+                                     onClick={() => setShowLessonModal(true)}
+                                     className="text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1 cursor-pointer transition"
+                                 >
+                                     Start Learning →
+                                 </button>
+                             </div>
                         </motion.div>
                     )}
 
@@ -376,6 +380,108 @@ const DashboardPage = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Study Lesson Modal */}
+            {showLessonModal && aiContent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100"
+                    >
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-purple-500 to-indigo-600 text-white">
+                            <div>
+                                <span className="text-xs uppercase tracking-widest font-semibold bg-white/20 px-3 py-1 rounded-full">
+                                    Interactive Lesson
+                                </span>
+                                <h2 className="text-2xl font-bold mt-2">{aiContent.title}</h2>
+                                <p className="text-purple-100 text-sm mt-1">{aiContent.description}</p>
+                            </div>
+                            <button
+                                onClick={() => setShowLessonModal(false)}
+                                className="p-2 hover:bg-white/20 rounded-full transition cursor-pointer text-white"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="p-8 overflow-y-auto flex-1 space-y-6">
+                            {/* Introduction */}
+                            <div className="prose max-w-none text-gray-700 leading-relaxed bg-blue-50/50 rounded-xl p-5 border-l-4 border-blue-500">
+                                <div dangerouslySetInnerHTML={{ __html: aiContent.content?.introduction || '' }} />
+                            </div>
+
+                            {/* Key Concepts */}
+                            {aiContent.content?.keyConcepts && (
+                                <div className="space-y-6 mt-6">
+                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                        <Sparkles className="w-5 h-5 text-purple-600" />
+                                        Core Learning Objectives
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {aiContent.content.keyConcepts.map((concept, idx) => (
+                                            <div key={idx} className="bg-gray-50 border border-gray-150 rounded-xl p-5 hover:shadow-sm transition">
+                                                <h4 className="font-bold text-purple-700 mb-2">{concept.concept}</h4>
+                                                <p className="text-gray-600 text-sm mb-4">{concept.explanation}</p>
+                                                {concept.example && (
+                                                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                                        <span className="text-[10px] tracking-wider uppercase font-bold text-purple-600 block mb-1">
+                                                            Practical Example
+                                                        </span>
+                                                        <p className="text-sm text-gray-800 font-medium italic">{concept.example}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Summary */}
+                            <div className="prose max-w-none text-gray-700 border-t border-gray-100 pt-6">
+                                <div dangerouslySetInnerHTML={{ __html: aiContent.content?.summary || '' }} />
+                            </div>
+
+                            {/* Resources */}
+                            {aiContent.content?.resources && (
+                                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-xl p-5 mt-6">
+                                    <h4 className="font-semibold text-purple-950 mb-2 flex items-center gap-1.5">
+                                        <Award className="w-5 h-5 text-purple-600" />
+                                        Suggested Learning Materials
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {aiContent.content.resources.map((res, i) => (
+                                            <span key={i} className="px-3 py-1 bg-white border border-purple-200 text-purple-800 rounded-full text-xs font-semibold">
+                                                📚 {res}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                            <span className="text-sm text-gray-500">
+                                Estimated Read: {aiContent.estimatedTime} minutes
+                            </span>
+                            <button
+                                onClick={() => {
+                                    setShowLessonModal(false);
+                                    toast.success('🎉 Lesson marked as completed! 50 XP awarded.', { duration: 4000 });
+                                }}
+                                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition flex items-center gap-2 cursor-pointer shadow-md hover:shadow-lg"
+                            >
+                                <CheckCircle2 className="w-5 h-5" />
+                                Complete Lesson
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
 
             <Footer />
         </div>

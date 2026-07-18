@@ -26,9 +26,17 @@ app.use(helmet({
 
 // CORS configuration
 const corsOptions = {
-    origin: process.env.NODE_ENV === 'production'
-        ? ['https://aptitudeai.com', 'https://www.aptitudeai.com']
-        : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', process.env.FRONTEND_URL].filter(Boolean),
+    origin: (origin, callback) => {
+        if (process.env.NODE_ENV === 'production') {
+            const productionOrigins = ['https://aptitudeai.com', 'https://www.aptitudeai.com'];
+            if (productionOrigins.indexOf(origin) !== -1) {
+                return callback(null, true);
+            }
+            return callback(new Error('Not allowed by CORS'));
+        }
+        // In development, allow all origins
+        callback(null, true);
+    },
     credentials: true,
     optionsSuccessStatus: 200,
 };

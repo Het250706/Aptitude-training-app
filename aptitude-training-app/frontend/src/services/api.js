@@ -478,8 +478,8 @@ export const updateNodeProgress = async (nodeId, progress, timeSpent) => {
  * Start a new adaptive quiz session
  * @returns {Promise} API response with session ID and first question
  */
-export const startQuiz = async () => {
-    const response = await api.post('/quiz/start');
+export const startQuiz = async (data) => {
+    const response = await api.post('/quiz/start', data);
     return response.data;
 };
 

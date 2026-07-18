@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles, Brain, Trophy, Timer, Zap, TrendingUp,
@@ -8,11 +9,15 @@ import { startQuiz, submitAnswer } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
+    const navigate = useNavigate();
     const [sessionId, setSessionId] = useState(null);
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
     const [showAnalysis, setShowAnalysis] = useState(false);
     const [analysis, setAnalysis] = useState(null);
+    const [correctAnswer, setCorrectAnswer] = useState(null);
+    const [nextQuestionData, setNextQuestionData] = useState(null);
+    const [sessionResultsData, setSessionResultsData] = useState(null);
     const [timeLeft, setTimeLeft] = useState(60);
     const [score, setScore] = useState(0);
     const [questionNumber, setQuestionNumber] = useState(1);
@@ -37,21 +42,38 @@ const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
 
     const startQuizSession = async () => {
         try {
-            const response = await startQuiz({
-                topic,
-                difficulty,
-                questionType: 'mcq',
-                questionCount: 10
-            });
+            setLoading(true);
+            const response = await startQuiz({ topic, difficulty });
             setSessionId(response.sessionId);
             setCurrentQuestion(response.firstQuestion);
-            setTotalQuestions(response.totalQuestions);
-            setTimeLeft(response.firstQuestion.timeLimit);
+            setTotalQuestions(response.totalQuestions || 10);
+            setTimeLeft(response.firstQuestion.timeLimit || 60);
         } catch (error) {
             console.error('Error starting quiz:', error);
             toast.error('Failed to start quiz');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleNextQuestion = () => {
+        if (nextQuestionData) {
+            setCurrentQuestion(nextQuestionData);
+            setSelectedAnswer(null);
+            setShowAnalysis(false);
+            setShowHint(false);
+            setAnalysis(null);
+            setCorrectAnswer(null);
+            setTimeLeft(nextQuestionData.timeLimit || 60);
+            setQuestionNumber(prev => prev + 1);
+            setNextQuestionData(null);
+        } else if (sessionResultsData) {
+            setQuizCompleted(true);
+            setResults(sessionResultsData);
+            if (onComplete) onComplete(sessionResultsData);
+            if (sessionResultsData.newBadges?.length) {
+                toast.success(`🎉 New badges unlocked: ${sessionResultsData.newBadges.join(', ')}`);
+            }
         }
     };
 
@@ -70,6 +92,7 @@ const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
             });
 
             setAnalysis(response.analysis);
+            setCorrectAnswer(response.correctAnswer);
             setScore(prev => prev + response.pointsEarned);
 
             if (response.analysis.isCorrect) {
@@ -79,23 +102,9 @@ const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
             }
 
             if (response.nextQuestion) {
-                setTimeout(() => {
-                    setCurrentQuestion(response.nextQuestion);
-                    setSelectedAnswer(null);
-                    setShowAnalysis(false);
-                    setShowHint(false);
-                    setAnalysis(null);
-                    setTimeLeft(response.nextQuestion.timeLimit);
-                    setQuestionNumber(prev => prev + 1);
-                }, 5000);
+                setNextQuestionData(response.nextQuestion);
             } else if (response.session) {
-                setQuizCompleted(true);
-                setResults(response.session);
-                if (onComplete) onComplete(response.session);
-
-                if (response.session.newBadges?.length) {
-                    toast.success(`🎉 New badges unlocked: ${response.session.newBadges.join(', ')}`);
-                }
+                setSessionResultsData(response.session);
             }
         } catch (error) {
             console.error('Error submitting answer:', error);
@@ -188,12 +197,20 @@ const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
                     </div>
                 </div>
 
-                <button
-                    onClick={() => window.location.reload()}
-                    className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
-                >
-                    Start New AI-Powered Quiz
-                </button>
+                <div className="flex flex-col sm:flex-row gap-4 mt-6 justify-center">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex-1 cursor-pointer"
+                    >
+                        Start New AI-Powered Quiz
+                    </button>
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="py-3 bg-gray-100 text-gray-700 border border-gray-250 rounded-lg font-semibold hover:bg-gray-200 transition flex-1 cursor-pointer"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
             </motion.div>
         );
     }
@@ -282,28 +299,28 @@ const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
                         <div className="space-y-3">
                             {currentQuestion?.options?.map((option, idx) => (
                                 <button
-                                    key={idx}
-                                    onClick={() => !showAnalysis && handleAnswer(option)}
-                                    disabled={showAnalysis}
-                                    className={`w-full text-left p-4 rounded-xl border-2 transition-all ${showAnalysis && selectedAnswer === option
-                                            ? option === currentQuestion.options[currentQuestion.correctAnswer]
-                                                ? 'border-green-500 bg-green-50'
-                                                : 'border-red-500 bg-red-50'
-                                            : showAnalysis && option === currentQuestion.options[currentQuestion.correctAnswer]
-                                                ? 'border-green-500 bg-green-50'
-                                                : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
-                                        } ${!showAnalysis && 'cursor-pointer'}`}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <span>{option}</span>
-                                        {showAnalysis && option === currentQuestion.options[currentQuestion.correctAnswer] && (
-                                            <CheckCircle className="w-5 h-5 text-green-500" />
-                                        )}
-                                        {showAnalysis && selectedAnswer === option && option !== currentQuestion.options[currentQuestion.correctAnswer] && (
-                                            <XCircle className="w-5 h-5 text-red-500" />
-                                        )}
-                                    </div>
-                                </button>
+                                     key={idx}
+                                     onClick={() => !showAnalysis && handleAnswer(option)}
+                                     disabled={showAnalysis}
+                                     className={`w-full text-left p-4 rounded-xl border-2 transition-all ${showAnalysis && selectedAnswer === option
+                                             ? option === correctAnswer
+                                                 ? 'border-green-500 bg-green-50'
+                                                 : 'border-red-500 bg-red-50'
+                                             : showAnalysis && option === correctAnswer
+                                                 ? 'border-green-500 bg-green-50'
+                                                 : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                                         } ${!showAnalysis && 'cursor-pointer'}`}
+                                 >
+                                     <div className="flex items-center justify-between">
+                                         <span>{option}</span>
+                                         {showAnalysis && option === correctAnswer && (
+                                             <CheckCircle className="w-5 h-5 text-green-500" />
+                                         )}
+                                         {showAnalysis && selectedAnswer === option && option !== correctAnswer && (
+                                             <XCircle className="w-5 h-5 text-red-500" />
+                                         )}
+                                     </div>
+                                 </button>
                             ))}
                         </div>
 
@@ -346,6 +363,13 @@ const AIAdaptiveQuiz = ({ topic, difficulty, onComplete }) => {
                                         <p className="text-sm text-teal-800">{analysis.nextSteps}</p>
                                     </div>
                                 )}
+
+                                <button
+                                    onClick={handleNextQuestion}
+                                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition cursor-pointer flex justify-center items-center gap-2 mt-4"
+                                >
+                                    {nextQuestionData ? 'Next Question ➡️' : 'View Results 🏆'}
+                                </button>
                             </motion.div>
                         )}
                     </div>

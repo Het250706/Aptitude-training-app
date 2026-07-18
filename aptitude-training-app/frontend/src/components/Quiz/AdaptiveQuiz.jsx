@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Trophy, Star, Timer, Zap, Heart, Award,
@@ -7,11 +8,16 @@ import {
 import { startQuiz, submitAnswer, getQuizResults } from '../../services/api';
 import toast from 'react-hot-toast';
 
-const AdaptiveQuiz = ({ onComplete }) => {
+const AdaptiveQuiz = ({ topic, onComplete }) => {
+    const navigate = useNavigate();
     const [sessionId, setSessionId] = useState(null);
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
     const [showExplanation, setShowExplanation] = useState(false);
+    const [correctAnswer, setCorrectAnswer] = useState(null);
+    const [explanationText, setExplanationText] = useState('');
+    const [nextQuestionData, setNextQuestionData] = useState(null);
+    const [sessionResultsData, setSessionResultsData] = useState(null);
     const [timeLeft, setTimeLeft] = useState(60);
     const [score, setScore] = useState(0);
     const [streak, setStreak] = useState(0);
@@ -35,15 +41,36 @@ const AdaptiveQuiz = ({ onComplete }) => {
 
     const startQuizSession = async () => {
         try {
-            const response = await startQuiz();
+            setLoading(true);
+            const response = await startQuiz({ topic });
             setSessionId(response.sessionId);
-            setCurrentQuestion(response.question);
-            setTimeLeft(response.question.timeLimit || 60);
+            setCurrentQuestion(response.firstQuestion);
+            setTimeLeft(response.firstQuestion.timeLimit || 60);
         } catch (error) {
             console.error('Error starting quiz:', error);
             toast.error('Failed to start quiz');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleNextQuestion = () => {
+        if (nextQuestionData) {
+            setCurrentQuestion(nextQuestionData);
+            setSelectedAnswer(null);
+            setCorrectAnswer(null);
+            setExplanationText('');
+            setShowExplanation(false);
+            setTimeLeft(nextQuestionData.timeLimit || 60);
+            setQuestionNumber(prev => prev + 1);
+            setNextQuestionData(null);
+        } else if (sessionResultsData) {
+            setQuizCompleted(true);
+            setResults(sessionResultsData);
+            if (onComplete) onComplete(sessionResultsData);
+            if (sessionResultsData.newBadges?.length) {
+                toast.success(`🎉 New badges unlocked: ${sessionResultsData.newBadges.join(', ')}`);
+            }
         }
     };
 
@@ -61,6 +88,9 @@ const AdaptiveQuiz = ({ onComplete }) => {
                 timeTaken
             });
 
+            setCorrectAnswer(response.correctAnswer);
+            setExplanationText(response.analysis?.conceptExplanation || response.analysis?.feedback || '');
+
             if (response.isCorrect) {
                 setScore(prev => prev + response.pointsEarned);
                 setStreak(prev => prev + 1);
@@ -70,22 +100,9 @@ const AdaptiveQuiz = ({ onComplete }) => {
             }
 
             if (response.nextQuestion) {
-                setTimeout(() => {
-                    setCurrentQuestion(response.nextQuestion);
-                    setSelectedAnswer(null);
-                    setShowExplanation(false);
-                    setTimeLeft(response.nextQuestion.timeLimit || 60);
-                    setQuestionNumber(prev => prev + 1);
-                }, 3000);
+                setNextQuestionData(response.nextQuestion);
             } else if (response.session) {
-                // Quiz completed
-                setQuizCompleted(true);
-                setResults(response.session);
-                if (onComplete) onComplete(response.session);
-
-                if (response.session.newBadges?.length) {
-                    toast.success(`🎉 New badges unlocked: ${response.session.newBadges.join(', ')}`);
-                }
+                setSessionResultsData(response.session);
             }
         } catch (error) {
             console.error('Error submitting answer:', error);
@@ -166,12 +183,20 @@ const AdaptiveQuiz = ({ onComplete }) => {
                     </div>
                 )}
 
-                <button
-                    onClick={() => window.location.reload()}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
-                >
-                    Start New Quiz
-                </button>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex-1 cursor-pointer"
+                    >
+                        Start New Quiz
+                    </button>
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="px-6 py-3 bg-gray-100 text-gray-700 border border-gray-250 rounded-lg font-semibold hover:bg-gray-200 transition flex-1 cursor-pointer"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
             </motion.div>
         );
     }
@@ -238,20 +263,20 @@ const AdaptiveQuiz = ({ onComplete }) => {
                                     onClick={() => !showExplanation && handleAnswer(option)}
                                     disabled={showExplanation}
                                     className={`w-full text-left p-4 rounded-xl border-2 transition-all ${showExplanation && selectedAnswer === option
-                                            ? option === currentQuestion.correctAnswer
+                                            ? option === correctAnswer
                                                 ? 'border-green-500 bg-green-50'
                                                 : 'border-red-500 bg-red-50'
-                                            : showExplanation && option === currentQuestion.correctAnswer
+                                            : showExplanation && option === correctAnswer
                                                 ? 'border-green-500 bg-green-50'
                                                 : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
                                         } ${!showExplanation && 'cursor-pointer'}`}
                                 >
                                     <div className="flex items-center justify-between">
                                         <span>{option}</span>
-                                        {showExplanation && option === currentQuestion.correctAnswer && (
+                                        {showExplanation && option === correctAnswer && (
                                             <CheckCircle className="w-5 h-5 text-green-500" />
                                         )}
-                                        {showExplanation && selectedAnswer === option && option !== currentQuestion.correctAnswer && (
+                                        {showExplanation && selectedAnswer === option && option !== correctAnswer && (
                                             <XCircle className="w-5 h-5 text-red-500" />
                                         )}
                                     </div>
@@ -261,15 +286,26 @@ const AdaptiveQuiz = ({ onComplete }) => {
                     )}
 
                     {showExplanation && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mt-6 p-4 bg-blue-50 rounded-xl"
-                        >
-                            <p className="text-sm text-blue-800">
-                                <strong>Explanation:</strong> {currentQuestion?.explanation}
-                            </p>
-                        </motion.div>
+                        <div className="mt-6 space-y-4">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-4 bg-blue-50 rounded-xl"
+                            >
+                                <p className="text-sm text-blue-800">
+                                    <strong>Explanation:</strong> {explanationText}
+                                </p>
+                            </motion.div>
+                            
+                            <motion.button
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                onClick={handleNextQuestion}
+                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition cursor-pointer flex justify-center items-center gap-2"
+                            >
+                                {nextQuestionData ? 'Next Question ➡️' : 'View Results 🏆'}
+                            </motion.button>
+                        </div>
                     )}
                 </motion.div>
             </AnimatePresence>

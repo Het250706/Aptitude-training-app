@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen,
     CheckCircle,
@@ -9,13 +10,40 @@ import {
     Award,
     Clock,
     Target,
-    TrendingUp
+    TrendingUp,
+    X,
+    Sparkles,
+    Brain,
+    CheckCircle2
 } from 'lucide-react';
 import Navbar from '../../components/Common/Navbar';
 import Footer from '../../components/Common/Footer';
+import { getLearningContent } from '../../services/api';
+import toast from 'react-hot-toast';
 
 const LearningPathPage = () => {
     const [selectedModule, setSelectedModule] = useState(null);
+    const [loadingContent, setLoadingContent] = useState(false);
+    const [aiContent, setAiContent] = useState(null);
+    const [showLessonModal, setShowLessonModal] = useState(false);
+    const navigate = useNavigate();
+
+    const handleRevise = async (lessonTitle) => {
+        setLoadingContent(true);
+        try {
+            const response = await getLearningContent({
+                topic: lessonTitle,
+                contentType: 'lesson'
+            });
+            setAiContent(response.content);
+            setShowLessonModal(true);
+        } catch (error) {
+            console.error('Error fetching lesson for revision:', error);
+            toast.error('Failed to load lesson content. Please try again.');
+        } finally {
+            setLoadingContent(false);
+        }
+    };
 
     const learningPath = {
         title: 'Your Personalized Learning Path',
@@ -232,12 +260,21 @@ const LearningPathPage = () => {
                                                             </div>
                                                         </div>
                                                         {!lesson.completed && module.status !== 'locked' && (
-                                                            <button className="px-4 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                                                            <button 
+                                                                onClick={() => navigate('/quiz', { state: { topic: lesson.title } })}
+                                                                className="px-4 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                                                            >
                                                                 Start
                                                             </button>
                                                         )}
                                                         {lesson.completed && (
-                                                            <span className="text-sm text-green-600">Completed</span>
+                                                            <button 
+                                                                onClick={() => handleRevise(lesson.title)}
+                                                                disabled={loadingContent}
+                                                                className="px-3 py-1 bg-green-50 hover:bg-green-100 border border-green-200 text-green-700 rounded-lg text-sm font-semibold transition flex items-center gap-1 cursor-pointer"
+                                                            >
+                                                                {loadingContent ? 'Loading...' : 'Revise 🔄'}
+                                                            </button>
                                                         )}
                                                     </div>
                                                 ))}
@@ -275,6 +312,108 @@ const LearningPathPage = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Study Lesson Modal */}
+            {showLessonModal && aiContent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden shadow-2xl flex flex-col border border-gray-100"
+                    >
+                        {/* Header */}
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-purple-500 to-indigo-600 text-white">
+                            <div>
+                                <span className="text-xs uppercase tracking-widest font-semibold bg-white/20 px-3 py-1 rounded-full">
+                                    Interactive Lesson Revision
+                                </span>
+                                <h2 className="text-2xl font-bold mt-2">{aiContent.title}</h2>
+                                <p className="text-purple-100 text-sm mt-1">{aiContent.description}</p>
+                            </div>
+                            <button
+                                onClick={() => setShowLessonModal(false)}
+                                className="p-2 hover:bg-white/20 rounded-full transition cursor-pointer text-white"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="p-8 overflow-y-auto flex-1 space-y-6">
+                            {/* Introduction */}
+                            <div className="prose max-w-none text-gray-700 leading-relaxed bg-blue-50/50 rounded-xl p-5 border-l-4 border-blue-500">
+                                <div dangerouslySetInnerHTML={{ __html: aiContent.content?.introduction || '' }} />
+                            </div>
+
+                            {/* Key Concepts */}
+                            {aiContent.content?.keyConcepts && (
+                                <div className="space-y-6 mt-6">
+                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                        <Sparkles className="w-5 h-5 text-purple-600" />
+                                        Core Learning Objectives
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {aiContent.content.keyConcepts.map((concept, idx) => (
+                                            <div key={idx} className="bg-gray-50 border border-gray-150 rounded-xl p-5 hover:shadow-sm transition">
+                                                <h4 className="font-bold text-purple-700 mb-2">{concept.concept}</h4>
+                                                <p className="text-gray-600 text-sm mb-4">{concept.explanation}</p>
+                                                {concept.example && (
+                                                    <div className="bg-white rounded-lg p-3 border border-gray-100">
+                                                        <span className="text-[10px] tracking-wider uppercase font-bold text-purple-600 block mb-1">
+                                                            Practical Example
+                                                        </span>
+                                                        <p className="text-sm text-gray-800 font-medium italic">{concept.example}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Summary */}
+                            <div className="prose max-w-none text-gray-700 border-t border-gray-100 pt-6">
+                                <div dangerouslySetInnerHTML={{ __html: aiContent.content?.summary || '' }} />
+                            </div>
+
+                            {/* Resources */}
+                            {aiContent.content?.resources && (
+                                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-xl p-5 mt-6">
+                                    <h4 className="font-semibold text-purple-950 mb-2 flex items-center gap-1.5">
+                                        <Award className="w-5 h-5 text-purple-600" />
+                                        Suggested Learning Materials
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {aiContent.content.resources.map((res, i) => (
+                                            <span key={i} className="px-3 py-1 bg-white border border-purple-200 text-purple-800 rounded-full text-xs font-semibold">
+                                                📚 {res}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                            <span className="text-sm text-gray-500">
+                                Estimated Read: {aiContent.estimatedTime} minutes
+                            </span>
+                            <button
+                                onClick={() => {
+                                    setShowLessonModal(false);
+                                    toast.success('📚 Lesson revision completed!');
+                                }}
+                                className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition flex items-center gap-2 cursor-pointer shadow-md hover:shadow-lg"
+                            >
+                                <CheckCircle2 className="w-5 h-5" />
+                                Done Revising
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
 
             <Footer />
         </div>

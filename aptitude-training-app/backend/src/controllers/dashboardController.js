@@ -83,14 +83,15 @@ class DashboardController {
             let averageAccuracy = 0;
             try {
                 const accuracyQuery = `
-          SELECT 
-            CASE WHEN COUNT(*) > 0 
-              THEN ROUND(AVG(CASE WHEN is_correct THEN 100 ELSE 0 END))
-              ELSE 0 
-            END as avg_accuracy
-          FROM quiz_responses
-          WHERE user_id = $1
-        `;
+           SELECT 
+             CASE WHEN COUNT(*) > 0 
+               THEN ROUND(AVG(CASE WHEN qr.is_correct THEN 100 ELSE 0 END))
+               ELSE 0 
+             END as avg_accuracy
+           FROM quiz_responses qr
+           JOIN quiz_sessions qs ON qr.session_id = qs.id
+           WHERE qs.user_id = $1
+         `;
                 const accuracyResult = await db.query(accuracyQuery, [userId]);
                 if (accuracyResult.rows[0]) {
                     averageAccuracy = parseInt(accuracyResult.rows[0].avg_accuracy) || 0;
@@ -257,16 +258,17 @@ class DashboardController {
             // Get weekly performance
             let weeklyPerformance = [];
             try {
-                const weeklyQuery = `
-          SELECT 
-            DATE_TRUNC('day', answered_at) as day,
-            ROUND(AVG(CASE WHEN is_correct THEN 100 ELSE 0 END)) as accuracy,
-            COUNT(*) as question_count
-          FROM quiz_responses
-          WHERE user_id = $1 AND answered_at > NOW() - INTERVAL '7 days'
-          GROUP BY DATE_TRUNC('day', answered_at)
-          ORDER BY day ASC
-        `;
+                 const weeklyQuery = `
+           SELECT 
+             DATE_TRUNC('day', qr.answered_at) as day,
+             ROUND(AVG(CASE WHEN qr.is_correct THEN 100 ELSE 0 END)) as accuracy,
+             COUNT(*) as question_count
+           FROM quiz_responses qr
+           JOIN quiz_sessions qs ON qr.session_id = qs.id
+           WHERE qs.user_id = $1 AND qr.answered_at > NOW() - INTERVAL '7 days'
+           GROUP BY DATE_TRUNC('day', qr.answered_at)
+           ORDER BY day ASC
+         `;
                 const weeklyResult = await db.query(weeklyQuery, [userId]);
                 weeklyPerformance = weeklyResult.rows;
             } catch (error) {

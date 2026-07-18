@@ -129,15 +129,16 @@ class MockTestController {
     async getUserWeakAreas(userId) {
         try {
             const query = `
-        SELECT topic, 
+        SELECT q.category as topic, 
                COUNT(*) as attempts,
-               SUM(CASE WHEN is_correct THEN 1 ELSE 0 END) as correct_count
+               SUM(CASE WHEN qr.is_correct THEN 1 ELSE 0 END) as correct_count
         FROM quiz_responses qr
+        JOIN quiz_sessions qs ON qr.session_id = qs.id
         JOIN adaptive_questions q ON qr.question_id = q.id
-        WHERE qr.user_id = $1
-        GROUP BY topic
-        HAVING (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) < 0.6
-        ORDER BY (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
+        WHERE qs.user_id = $1
+        GROUP BY q.category
+        HAVING (SUM(CASE WHEN qr.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) < 0.6
+        ORDER BY (SUM(CASE WHEN qr.is_correct THEN 1 ELSE 0 END)::float / COUNT(*)) ASC
         LIMIT 3
       `;
             const result = await db.query(query, [userId]);
