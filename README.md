@@ -26,6 +26,34 @@ AptitudeAI is built for job-seekers, engineering students, and professionals aim
 
 ---
 
+## 🚀 Recent Platform Upgrades & Custom Enhancements
+
+We have recently upgraded the platform to optimize learning flows, snappiness, correctness visual cues, and API resilience:
+
+1. **Interactive Revision (`Revise 🔄`) for Mastered Lessons**
+   - Transformed static "Completed" text tags inside the **Learning Path Page** into interactive **"Revise 🔄"** actions.
+   - Designed a full-screen, premium **Study Lesson Modal** displaying key objectives, step-by-step math and logic examples, and summary resources, allowing students to revise content at any time.
+
+2. **Snappy & User-Controlled Quiz Progression**
+   - Replaced standard forced automatic next-question transitions (3 to 5-second locks) with interactive user controls.
+   - Submitting an answer instantly evaluates the choice and loads the explanation alongside a manual **"Next Question ➡️"** or **"View Results 🏆"** button to eliminate wait times.
+
+3. **Dynamic Visual Highlights for Correctness**
+   - Added database-to-client correctness mappings on answer submission.
+   - The quiz client highlights selected wrong choices in red (with an X icon) and correct answers in green (with a check icon) dynamically.
+
+4. **Resilient AI-to-Local Fallback Quiz Loop**
+   - Implemented a robust fallback mechanism. If the OpenAI API key is missing, invalid (401), or rate-limited, the backend automatically transitions to serving sequential questions from the pre-generated database session pool.
+
+5. **Randomized Question Order (Duplicate Mitigation)**
+   - Modified session start queries to randomly shuffle the cached question pool, ensuring every quiz session presents a completely different starting question and sequence.
+
+6. **Snappy Logouts & Dashboard Navigation**
+   - Connected Navbar logout handlers to React context states to synchronize storage instantly without page reloads.
+   - Added a **"Back to Dashboard"** option next to "Start New Quiz" on the results screen.
+
+---
+
 ## 🗺️ How It Works (User Journey)
 
 The flow diagram below demonstrates the complete lifecycle of a user onboarding and learning within the system:
